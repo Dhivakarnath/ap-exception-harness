@@ -1,0 +1,78 @@
+# Manufacturing starter pack.
+#
+# Manufacturing leads AP automation adoption: thousands of monthly invoices
+# across many component and raw-material suppliers, nearly all PO-backed.
+# Controls are therefore strict — a goods receipt is mandatory, and non-PO
+# spend is not permitted through this pipeline.
+#
+# Bump `version` on every rule change so past decisions remain replayable.
+
+tenant_id: manufacturing-demo
+version: "1.0.0"
+industry: manufacturing
+description: >
+  High-volume PO-backed procurement. Strict three-way matching with a small
+  price tolerance for commodity price drift, zero quantity tolerance, and
+  mandatory goods receipt.
+
+base_currency: USD
+
+tolerances:
+  # Commodity and freight surcharges move slightly between PO and invoice.
+  price_pct: "2.0"
+  # You either received the units or you did not.
+  quantity_pct: "0.0"
+  # Absorbs per-line rounding differences only.
+  total_absolute: "1.00"
+  allow_partial_delivery: true
+  # Billing more than was received is the classic overpayment route.
+  allow_overbilling: false
+
+thresholds:
+  # Clean, PO-backed, GRN-confirmed invoices below this post without review.
+  # The human authorisation already happened when the PO was approved.
+  touchless_max: "2500.00"
+  min_confidence_for_touchless: 0.90
+  min_confidence_for_gl_coding: 0.85
+  threshold_avoidance_band_pct: "5.0"
+
+doa:
+  bands:
+    - tier: buyer
+      max_amount: "5000.00"
+      roles: [buyer, ap_clerk]
+    - tier: plant_manager
+      max_amount: "25000.00"
+      roles: [plant_manager]
+    - tier: controller
+      max_amount: "100000.00"
+      roles: [controller]
+    - tier: cfo
+      # Unbounded top tier: nothing may fall through without an approver.
+      roles: [cfo]
+
+sod:
+  agent_may_code: true
+  agent_may_route: true
+  agent_may_approve_below_touchless: true
+  # Not configurable — enforced false by the schema.
+  agent_may_approve_above_touchless: false
+  approver_must_differ_from_coder: true
+  approver_must_differ_from_payer: true
+
+duplicates:
+  lookback_days: 90
+  fuzzy_number_similarity: 0.85
+  fuzzy_amount_tolerance: "0.00"
+  fuzzy_date_window_days: 7
+
+payment_terms:
+  default_terms: "NET30"
+  capture_discounts: true
+  min_discount_annualised_pct: "10.0"
+
+# Mandatory goods receipt: dropping it degrades to two-way matching and loses
+# the "did we actually receive this" control.
+require_grn: true
+# Non-PO spend is routed out of this pipeline entirely for this tenant.
+allow_non_po_invoices: false

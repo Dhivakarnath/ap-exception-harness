@@ -1,0 +1,143 @@
+[project]
+name = "ap-exception-agent"
+version = "0.1.0"
+description = "Agentic Accounts Payable exception-handling layer — deterministic 3-way match, guardrailed agent, MCP integrations"
+requires-python = "==3.12.*"
+
+# All versions pinned exactly and verified against PyPI at scaffold time.
+# Rationale: reproducible builds; a portfolio reviewer must get an identical
+# resolution months later. See docs/adr/ADR-015-dependency-pinning.md
+dependencies = [
+    # --- API / server ---
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
+    "sse-starlette==3.4.9",
+    "python-multipart==0.0.32",
+
+    # --- config / models ---
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "pyyaml==6.0.3",
+
+    # --- agent orchestration ---
+    "langchain==1.3.18",
+    "langgraph==1.2.11",
+    "langchain-aws==1.7.5",
+    "langchain-mcp-adapters==0.3.2",
+    # mcp held at latest 1.x: langchain-mcp-adapters 0.3.2 requires mcp>=1.24.0,<2.0.0
+    "mcp==1.29.1",
+    # Durable HITL checkpointer: pauses (interrupt/resume) survive a process
+    # restart, which an AP review queue requires (an invoice can wait days for
+    # approval). 3.1.2 pins langgraph-checkpoint>=4.1.0,<5.0.0 (we have 4.2.0).
+    "langgraph-checkpoint-postgres==3.1.2",
+    "psycopg-pool==3.2.6",
+
+    # --- persistence ---
+    "sqlalchemy==2.0.52",
+    "alembic==1.19.1",
+    "psycopg[binary]==3.3.5",
+    "pgvector==0.5.0",
+
+    # --- retrieval (lexical + fuzzy; dense via pgvector) ---
+    "rank-bm25==0.2.2",
+    "rapidfuzz==3.14.6",
+
+    # --- observability ---
+    "opentelemetry-sdk==1.44.0",
+    "opentelemetry-exporter-otlp-proto-http==1.44.0",
+    "langfuse==4.15.1",
+    "structlog==26.1.0",
+
+    # --- aws (Bedrock Converse / Nova Lite) ---
+    "boto3==1.43.87",
+]
+
+[project.optional-dependencies]
+# Heavy extras are separate so the core stack installs fast and CPU-only.
+# Install with: uv sync --extra parse --extra ml --extra dev
+parse = [
+    "docling==2.124.0",
+]
+ml = [
+    "sentence-transformers==6.0.1",
+    "torch==2.14.0",
+]
+# NOTE: no separate OCR extra. Docling provides OCR for scanned/image-only
+# documents via its own pluggable engines, so a standalone PaddleOCR dependency
+# would be a redundant moving part (and hard-pins pyyaml==6.0.2, conflicting
+# with the rest of the stack). See docs/adr/ADR-012-parsing-and-extraction.md
+eval = [
+    "deepeval==4.2.0",
+]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "httpx==0.28.1",
+    "ruff==0.16.5",
+    "mypy==2.3.1",
+    "faker==40.38.0",
+    "reportlab==5.0.1",
+    "pypdf==6.16.2",
+    "types-pyyaml==6.0.12.20250915",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ap_agent"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RET", "SIM", "PTH"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 assert, S105/S106 dummy credentials, S108 /tmp paths in fixture data —
+# all expected in tests.
+"tests/**" = ["S101", "S105", "S106", "S108"]
+"evals/test_*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "docling.*",
+    "pgvector.*",
+    "rank_bm25.*",
+    "langfuse.*",
+    "deepeval.*",
+    "sentence_transformers.*",
+    # reportlab ships no type stubs; used only by the fixture generator.
+    "reportlab.*",
+    # pypdfium2 ships no py.typed marker; arrives via docling.
+    "pypdfium2.*",
+    # The mock ERP (`app.*`) is a separate repo-root deployable. The Slice-8
+    # in-process ERP client imports it lazily as a convenience seam; Slice 9
+    # replaces that with an MCP-transport client and this coupling disappears.
+    # It is type-checked on its own via `mypy ../mock_erp/app`.
+    "app.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+markers = [
+    "integration: requires running services (postgres, mock_erp)",
+    "bedrock: requires live AWS Bedrock credentials",
+    "ml: requires the ml extra (torch / sentence-transformers)",
+    "eval: deterministic eval harness tests",
+    "eval_live: live DeepEval + Bedrock eval tiers",
+]
