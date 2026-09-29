@@ -8,8 +8,10 @@ Figures in the essay use `raw.githubusercontent.com` so they render on GitHub an
 
 | File | In the essay? | Caption |
 |------|---------------|---------|
-| [`figures/AP-1.drawio.png`](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-1.drawio.png) | Yes — Figure 1 | Who owns the decision |
-| [`figures/AP-2.drawio.png`](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-2.drawio.png) | Yes — Figure 2 | Gated vs reported vs cited |
+| [`figures/aws-architecture.drawio.png`](figures/aws-architecture.drawio.png) | Yes — Figure 1 | Production v1 runtime |
+| [`figures/aws-architecture.drawio`](figures/aws-architecture.drawio) | Source only | Editable original for Figure 1 |
+| [`figures/AP-1.drawio.png`](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-1.drawio.png) | Yes — Figure 2 | Who owns the decision |
+| [`figures/AP-2.drawio.png`](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-2.drawio.png) | Yes — Figure 3 | Gated vs reported vs cited |
 | [`figures/the-line.drawio`](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/blog/figures/the-line.drawio) | Source only | Editable original for AP-1 |
 | [`figures/how-we-measure.drawio`](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/blog/figures/how-we-measure.drawio) | Source only | Editable original for AP-2 |
 | [`figures/application_images/Runs-page.png`](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/application_images/Runs-page.png) | Yes | Route and status as recorded |
