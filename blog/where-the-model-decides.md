@@ -6,13 +6,13 @@ An invoice that should have been held can still look like a successful demo. The
 
 This is a write-up of v1 of an AP exception layer we built to make that trail real. The claim is not that a frontier model is unnecessary in general. The claim is narrower: **on this job, a small multimodal model is enough when control flow is not in the prompt.** Amazon Nova Lite runs extraction and non-PO GL coding. Everything that makes the system employable — routing, three-way match, fourteen policy checks, segregation of duties, the pause for a human, the ERP write contract — is code.
 
-v1 is production-shaped, not production volume. Ingress is upload. ERP and notifications are mock connectors behind a real MCP contract. The quality proof is an adversarial eval gate plus a small live Bedrock sample, labeled as such. What follows is the decision record, the measurement, one failure we did not have to publish, and the connector work that comes next.
+v1 is production-shaped, not production volume. Ingress is upload. ERP and notifications are mock connectors behind a real MCP contract. The quality proof is an adversarial eval gate plus a small live Bedrock sample, labeled as such. The code lives in [`ap-exception-harness`](https://github.com/Dhivakarnath/ap-exception-harness). What follows is the decision record, the measurement, one failure we did not have to publish, and the connector work that comes next.
 
 ---
 
 ## What “done” means
 
-The system terminates at **approved for payment**. It does not pay. That ceiling is [ADR-011](../docs/adr/ADR-011-no-payment-execution.md), not a prompt instruction.
+The system terminates at **approved for payment**. It does not pay. That ceiling is [ADR-011](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/adr/ADR-011-no-payment-execution.md), not a prompt instruction.
 
 That boundary is the product. A payment tool would make a clever agent look more complete and would make every other guarantee harder to defend. The ERP connector may post a bill, place a hold, or raise an exception. There is no `pay`, `disburse`, or `remit` in the toolset; a test asserts the names are disjoint, and the MCP server does not expose a payment scope.
 
@@ -27,7 +27,7 @@ An invoice is done when one of four routes is recorded, with an actor and a time
 
 Auto-approve from a human is illegal. An agent naming itself as approver on a human-approval route is illegal. Those constraints live in the domain model and again as database check constraints. Defense in depth is not a slogan here; it is the same rule in two layers so a bypass of one still fails.
 
-![Invoice runs with Auto-approved, Held, Needs approval, and Awaiting review](figures/application_images/Runs-page.png)
+![Invoice runs with Auto-approved, Held, Needs approval, and Awaiting review](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/application_images/Runs-page.png)
 
 *Route and status on recorded runs — not a success rate. Auto-approved, held, and needs-approval are ledger outcomes; awaiting review is a paused graph, not a finished demo. Cost tiles are inference only.*
 
@@ -46,11 +46,11 @@ The core decision was where the model is allowed to decide. Four shapes were on 
 | **C. One path for every invoice** — always three-way match, always RAG | One test matrix | Matching a non-PO invoice is meaningless. RAG on a PO that already has a GL is wasted spend and a conflated eval. |
 | **D. Composite** — LangGraph supervisor, policy-as-code, model only on judgment nodes | Auditability with a place for judgment | Two paths to build and explain. Mock ERP still hides real connector quirks. |
 
-We took D. That choice, the options we refused, and the revisit rule are the [compiled architecture decision record](../docs/adr/ADR-001-system-architecture.md) — written in `docs/` as we built, not for this post.
+We took D. That choice, the options we refused, and the revisit rule are the [compiled architecture decision record](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/adr/ADR-001-system-architecture.md) — written in `docs/` as we built, not for this post.
 
 [Anthropic’s](https://www.anthropic.com/engineering/building-effective-agents) distinction is the right vocabulary: a *workflow* has predefined code paths; an *agent* lets the model direct process and tools. AP matching is not an open-ended task. The step count is known. Latency and cost compound with every extra model call, and a finance stakeholder cannot accept a different tool sequence for the same invoice tomorrow. [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) is in the stack because it lets a graph mix hand-coded steps with LLM-driven ones, persist a paused run, and interrupt for a human — not because “we built an agent.”
 
-The residual risk of D is honest: two paths, three eval surfaces, three permission layers. If v2 has to change the supervisor’s routing or the policy engine’s check names to onboard a customer ERP, the v1 interface was wrong. That rule is in [ADR-001](../docs/adr/ADR-001-system-architecture.md) and again in the [v2 roadmap](../docs/v2-integration-roadmap.md) so we cannot quietly violate it later.
+The residual risk of D is honest: two paths, three eval surfaces, three permission layers. If v2 has to change the supervisor’s routing or the policy engine’s check names to onboard a customer ERP, the v1 interface was wrong. That rule is in [ADR-001](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/adr/ADR-001-system-architecture.md) and again in the [v2 roadmap](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/v2-integration-roadmap.md) so we cannot quietly violate it later.
 
 ---
 
@@ -58,7 +58,7 @@ The residual risk of D is honest: two paths, three eval surfaces, three permissi
 
 **Figure 1.** Who owns the decision. Amber boxes may call Nova Lite. Blue boxes are code. Green boxes are a human or an ERP write.
 
-![Who owns the decision: amber model nodes, blue code path, green human or ERP write](figures/AP-1.drawio.png)
+![Who owns the decision: amber model nodes, blue code path, green human or ERP write](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-1.drawio.png)
 
 A PDF arrives through the upload UI. An ingress gateway validates it, content-hash dedupes it, and persists a `documents` row before any model runs. Docling parses structure and escalates to OCR only when the structural yield is implausibly low. Nova Lite then fills a schema-constrained `Invoice` — fail loud on type coercion, with per-field confidence and a source region so the UI can highlight the page.
 
@@ -70,7 +70,7 @@ Writes are earned. Agent RBAC hides write tools from any model that should not s
 
 When the route is approval, the graph pauses on a Postgres checkpointer. The run, the invoice, the extraction provenance, and one pending review row are written **before** the interrupt, so a process restart does not erase the queue. A human approves, edits the GL, or rejects — from the run page or the Reviews queue. The human is the actor of record. The model is not.
 
-![Pending review: amount over $1,000 ceiling, Approve / Edit GL / Reject](figures/application_images/Reviews-page.png)
+![Pending review: amount over $1,000 ceiling, Approve / Edit GL / Reject](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/application_images/Reviews-page.png)
 
 *HITL as a persisted row: the ceiling names the tier; Approve, Edit GL, and Reject are human actions of record. The queue copy is the restart invariant, not marketing.*
 
@@ -84,7 +84,7 @@ Industry positioning, labeled as **not this pilot**: on the [FATURA invoice KIE 
 
 **Figure 2.** How we measure. A gated score may fail CI. A reported score is live and small-n. A cited score is someone else’s survey. They never share a headline.
 
-![Three columns: Gated, Reported, Cited — never one headline metric](figures/AP-2.drawio.png)
+![Three columns: Gated, Reported, Cited — never one headline metric](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-2.drawio.png)
 
 [Hamel Husain’s](https://hamel.dev/blog/posts/evals/) rule is the one we actually used: unsuccessful LLM products fail on evaluation, and [switching the model is not the first lever](https://hamel.dev/blog/posts/evals-faq/) unless error analysis says the model is the problem. [Anthropic](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) is blunter still: when you evaluate “an agent,” you evaluate **harness and model together**. Their CORE-Bench anecdote is the shape of our own incident later — Opus 4.5 moved from 42% to 95% after grader bugs and a less-constrained scaffold were fixed, not after a bigger model.
 
@@ -92,7 +92,7 @@ We split three surfaces on purpose.
 
 ### Gated (CI may go red)
 
-`make eval` on a 30-mode adversarial smoke set, 16 September 2026, `backend/evals/results.json`:
+`make eval` on a 30-mode adversarial smoke set, 16 September 2026, [`backend/evals/results.json`](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/backend/evals/results.json):
 
 | Metric | Score | Gate |
 |--------|-------|------|
@@ -119,13 +119,13 @@ Live tiers need AWS credentials in the shell. They are expensive enough that the
 
 Per-upload judges run asynchronously after a terminal live run and land in `run_evaluations`. A paused HITL run is not scored as finished. The Evals UI labels manifest gate versus upload judges so a reader cannot mistake “in progress” for quality.
 
-![Manifest CI gate at 100% beside live Argument correctness at 50%](figures/application_images/Evals-page.png)
+![Manifest CI gate at 100% beside live Argument correctness at 50%](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/application_images/Evals-page.png)
 
 *Same screen, two labels: the manifest CI gate at 100%, live argument correctness at 50% on n=2. The red number is the point — a metric that can look bad is the one worth showing.*
 
 ### Operational (this deployment, small n)
 
-`make roi-metrics`, 18 September 2026, document-processed runs with extraction provenance — methodology and the measured-vs-cited split are in the [ROI framing](../docs/roi-framing.md):
+`make roi-metrics`, 18 September 2026, document-processed runs with extraction provenance — methodology and the measured-vs-cited split are in the [ROI framing](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/roi-framing.md):
 
 | Metric | Value | Note |
 |--------|-------|------|
@@ -143,7 +143,7 @@ Latency for a deterministic graph is a forecastable p95 once volume exists. An o
 
 ## The dashboard that could lie
 
-The failures that taught us the most were not “the model hallucinated a total.” They were **green numbers that would not survive a second engineer reading the grader**. The compiled write-up is the [post-build report](../docs/post-build-report.md); the raw trail is the [incident log](../docs/incident-log.md).
+The failures that taught us the most were not “the model hallucinated a total.” They were **green numbers that would not survive a second engineer reading the grader**. The compiled write-up is the [post-build report](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/post-build-report.md); the raw trail is the [incident log](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/incident-log.md).
 
 Early scorecard reported task completion at 100% while the route predictor read the manifest label it was supposed to be judged against. Tool and argument correctness were hard-coded to 1.0 in places, so DeepEval never saw a real ERP trace. Policy smoke sat at 83% until we fixed the *expectations*, not the engine, to match what the checks actually do. Live task prompts over-required PO tools on non-PO uploads and punished argument scores for calls the rubric should not have demanded.
 
@@ -171,7 +171,7 @@ None of that is an apology for mocks. It is the fidelity label Fin and Anthropic
 
 ## What would change our mind
 
-v2 is connector swaps, not a rewrite. The interface list is the [v2 integration roadmap](../docs/v2-integration-roadmap.md).
+v2 is connector swaps, not a rewrite. The interface list is the [v2 integration roadmap](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/v2-integration-roadmap.md).
 
 Email, webhook, and bucket adapters should hit the same `InvoiceReceived` event the upload path already hits. A customer ERP — QuickBooks Online or ERPNext — should implement the same MCP tools, with OAuth, idempotent posts, and sandbox tests that record what the mock hid: partial PO lines, rate limits, stale GRNs, multi-currency quirks. Slack interactivity should resume the same HITL endpoint the in-app queue uses. If any of that requires editing `supervisor.py` routing or `policy/engine.py` checks, we fix the v1 interface first.
 
@@ -187,15 +187,16 @@ If those hold with a small model, the harness was the product. If they only hold
 
 Industry and craft citations are linked at first mention in the body.
 
-The records below are not appendices written for this essay. They live in `docs/`, next to the code, because they were the working papers of the build — GitHub renders the markdown as pages, so a reader of the post can open the same file we used while shipping.
+The records below are not appendices written for this essay. They live in [`docs/`](https://github.com/Dhivakarnath/ap-exception-harness/tree/main/docs), next to the code, because they were the working papers of the build. Each link is the file on GitHub.
 
 | Record | What it is |
 |--------|------------|
-| [ADR-001 — system architecture](../docs/adr/ADR-001-system-architecture.md) | Options, the composite decision, consequences, revisit rule |
-| [ADR-011 — no payment execution](../docs/adr/ADR-011-no-payment-execution.md) | Terminates at approved for payment |
-| [ADR index](../docs/adr/README.md) | Routing, extraction, eval scoring, three-layer permissions |
-| [Post-build report](../docs/post-build-report.md) | Failures compiled from the incident log |
-| [Incident log](../docs/incident-log.md) | Append-only trail (INC-001–026) |
-| [ROI framing](../docs/roi-framing.md) | Measured vs cited vs modeled — how not to mix them |
-| [v2 integration roadmap](../docs/v2-integration-roadmap.md) | Connector swaps; if the supervisor must change, v1 was wrong |
-| [`backend/evals/results.json`](../backend/evals/results.json) | The gated scorecard this post quotes |
+| [This essay on GitHub](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/blog/where-the-model-decides.md) | Canonical post, with figures |
+| [ADR-001 — system architecture](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/adr/ADR-001-system-architecture.md) | Options, the composite decision, consequences, revisit rule |
+| [ADR-011 — no payment execution](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/adr/ADR-011-no-payment-execution.md) | Terminates at approved for payment |
+| [ADR index](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/adr/README.md) | Routing, extraction, eval scoring, three-layer permissions |
+| [Post-build report](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/post-build-report.md) | Failures compiled from the incident log |
+| [Incident log](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/incident-log.md) | Append-only trail (INC-001–026) |
+| [ROI framing](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/roi-framing.md) | Measured vs cited vs modeled — how not to mix them |
+| [v2 integration roadmap](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/docs/v2-integration-roadmap.md) | Connector swaps; if the supervisor must change, v1 was wrong |
+| [`backend/evals/results.json`](https://github.com/Dhivakarnath/ap-exception-harness/blob/main/backend/evals/results.json) | The gated scorecard this post quotes |
