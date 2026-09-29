@@ -1,0 +1,288 @@
+# Local stack. Requirement NFR-5: the whole system runs locally with no paid
+# SaaS dependency, so a reviewer can clone and run it.
+#
+# Core (always needed):
+#   docker compose up -d postgres mock-erp
+#
+# Full observability stack (Langfuse v4 + an OTLP collector) — heavier, only
+# needed to see LLM traces in a UI:
+#   docker compose --profile observability up -d
+#
+# The observability services are behind a compose profile so the everyday
+# core stack stays light: Langfuse v4 is genuinely six containers (web, worker,
+# its own postgres, clickhouse, redis, minio) plus the collector. Nothing here
+# is a paid dependency — Langfuse is MIT/self-hosted (ADR-006) and the collector
+# is the CNCF OpenTelemetry Collector.
+
+name: ap-exception-agent
+
+services:
+  # ---------------------------------------------------------------- postgres
+  # Single store for the APP's relational data AND vectors (ADR-008):
+  # transactional consistency between a chunk and its embedding, hybrid
+  # retrieval in one engine, tenant isolation as a native SQL predicate.
+  # This is the application database and is entirely separate from Langfuse's
+  # own postgres below.
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ap
+      POSTGRES_PASSWORD: ap
+      POSTGRES_DB: ap_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ap -d ap_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ----------------------------------------------------------------- mock ERP
+  # System of action for v1. Object model mirrors QuickBooks Online so the
+  # real connector is a swap, not a redesign (ADR-014).
+  mock-erp:
+    build:
+      context: ./mock_erp
+    ports:
+      # Host 8091 (8081 is a commonly occupied port on dev machines).
+      - "8091:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8081/health')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # --------------------------------------------------------------- backend
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://ap:ap@postgres:5432/ap_agent
+      MOCK_ERP_BASE_URL: http://mock-erp:8081
+      CHECKPOINTER_BACKEND: postgres
+      CORS_ALLOW_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost
+    volumes:
+      - upload_data:/app/backend/var/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-erp:
+        condition: service_healthy
+
+  # -------------------------------------------------------------- frontend
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # ---------------------------------------------------- HITL lifecycle cron
+  hitl-lifecycle:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://ap:ap@postgres:5432/ap_agent
+      CHECKPOINTER_BACKEND: postgres
+    command: ["sh", "-c", "while true; do uv run python scripts/hitl_lifecycle.py; sleep 86400; done"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ====================================================================
+  # Observability stack (profile: observability). ADR-006: self-hosted
+  # Langfuse for LLM traces, fed over OTLP so the backend stays swappable.
+  # Langfuse v4 is OTEL-native and requires its full service set; we pin it
+  # and namespace every service + volume so it never collides with the app's
+  # own postgres (host 5432) or mock ERP (host 8091).
+  # ====================================================================
+
+  # ------------------------------------------------------ otel collector
+  # The vendor-neutral hop. The app exports OTLP/HTTP to this on host :4318;
+  # the collector prints spans (proof of the generic path) and forwards them
+  # to Langfuse. Config: scripts/otel-collector-config.yaml.
+  otel-collector:
+    profiles: ["observability"]
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./scripts/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      # Internal service DNS — the collector talks to langfuse-web on the
+      # compose network, not via the host port.
+      LANGFUSE_OTEL_ENDPOINT: http://langfuse-web:3000/api/public/otel
+      # Basic base64("<public_key>:<secret_key>"). Computed from the init keys
+      # below: pk-lf-local-ap-agent / sk-lf-local-ap-agent.
+      # base64("pk-lf-local-ap-agent:sk-lf-local-ap-agent") ==
+      #   cGstbGYtbG9jYWwtYXAtYWdlbnQ6c2stbGYtbG9jYWwtYXAtYWdlbnQ=
+      LANGFUSE_OTEL_AUTHORIZATION: "Basic cGstbGYtbG9jYWwtYXAtYWdlbnQ6c2stbGYtbG9jYWwtYXAtYWdlbnQ="
+    ports:
+      - "4318:4318"   # OTLP/HTTP (what tracing.py targets)
+      - "4317:4317"   # OTLP/gRPC (available; app uses HTTP)
+    depends_on:
+      langfuse-web:
+        condition: service_started
+
+  # --------------------------------------------------------- langfuse web
+  langfuse-web:
+    profiles: ["observability"]
+    image: langfuse/langfuse:3
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment: &langfuse-common-env
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
+      SALT: local-dev-only-not-a-secret
+      # 64 hex chars (openssl rand -hex 32). Local-dev only; v3 rejects an
+      # all-zero key, so this is a real generated value committed for the
+      # reviewer's local stack — it protects nothing but local test data.
+      ENCRYPTION_KEY: e1d7df86077ce4bf8174303c7ffda76d55a698daef79b74bf51e8ce507b1afe1
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
+      CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+      CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      REDIS_HOST: langfuse-redis
+      REDIS_PORT: "6379"
+      REDIS_AUTH: langfuse-redis-secret
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: local-dev-only-not-a-secret
+      # Headless bootstrap so a reviewer (and this verification) gets a project
+      # with KNOWN keys without clicking through the UI. Local-only credentials.
+      LANGFUSE_INIT_ORG_ID: ap-agent-org
+      LANGFUSE_INIT_ORG_NAME: AP Agent
+      LANGFUSE_INIT_PROJECT_ID: ap-agent
+      LANGFUSE_INIT_PROJECT_NAME: ap-exception-agent
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-local-ap-agent
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-local-ap-agent
+      LANGFUSE_INIT_USER_EMAIL: dev@local.dev
+      LANGFUSE_INIT_USER_NAME: Local Dev
+      LANGFUSE_INIT_USER_PASSWORD: local-dev-password
+
+  # ------------------------------------------------------ langfuse worker
+  langfuse-worker:
+    profiles: ["observability"]
+    image: langfuse/langfuse-worker:3
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      langfuse-minio:
+        condition: service_healthy
+    environment:
+      <<: *langfuse-common-env
+
+  # --------------------------------------------------- langfuse postgres
+  # Langfuse's OWN metadata store. NO host port (internal only) so it cannot
+  # collide with the app's postgres on host 5432.
+  langfuse-postgres:
+    profiles: ["observability"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # -------------------------------------------------- langfuse clickhouse
+  langfuse-clickhouse:
+    profiles: ["observability"]
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ------------------------------------------------------- langfuse redis
+  langfuse-redis:
+    profiles: ["observability"]
+    image: redis:7
+    command: >
+      --requirepass langfuse-redis-secret
+      --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  # ------------------------------------------------------- langfuse minio
+  # S3-compatible object store for Langfuse event/media payloads.
+  langfuse-minio:
+    profiles: ["observability"]
+    image: minio/minio
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniosecret
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  pgdata:
+  upload_data:
+  langfuse_pgdata:
+  langfuse_clickhouse_data:
+  langfuse_clickhouse_logs:
+  langfuse_minio_data:

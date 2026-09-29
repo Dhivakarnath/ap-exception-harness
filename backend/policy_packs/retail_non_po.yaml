@@ -1,0 +1,83 @@
+# Retail / e-commerce starter pack.
+#
+# Retail carries heavy non-PO spend (marketing, services, facilities, seasonal
+# suppliers) and pronounced volume surges. The dominant workload is therefore
+# the opposite of manufacturing: many invoices arrive with no purchase order,
+# so GL coding must be determined from policy and precedent rather than
+# inherited from a PO.
+#
+# This pack exists to prove the same engine serves a materially different
+# control posture through configuration alone (ADR-004).
+
+tenant_id: retail-demo
+version: "1.0.0"
+industry: retail
+description: >
+  Non-PO-heavy spend with seasonal volume. Looser price tolerance for service
+  invoices, goods receipt optional, and a lower touchless ceiling because a
+  larger share of invoices lack the upstream PO authorisation.
+
+base_currency: USD
+
+tolerances:
+  # Service and marketing invoices vary more against estimates than
+  # commodity purchase orders do.
+  price_pct: "5.0"
+  quantity_pct: "2.0"
+  total_absolute: "5.00"
+  allow_partial_delivery: true
+  allow_overbilling: false
+
+thresholds:
+  # Deliberately lower than manufacturing. Many invoices here have no PO, so
+  # the upstream human authorisation that justifies touchless approval is
+  # absent and more should be reviewed.
+  touchless_max: "1000.00"
+  min_confidence_for_touchless: 0.88
+  # GL coding is the main agent task for this tenant, so the bar is explicit.
+  # A supporting citation is required regardless of confidence (FR-5.4).
+  min_confidence_for_gl_coding: 0.82
+  threshold_avoidance_band_pct: "5.0"
+
+doa:
+  bands:
+    - tier: store_manager
+      max_amount: "2500.00"
+      roles: [store_manager, ap_clerk]
+    - tier: regional_manager
+      max_amount: "15000.00"
+      roles: [regional_manager]
+    - tier: controller
+      max_amount: "75000.00"
+      roles: [controller]
+    - tier: cfo
+      roles: [cfo]
+
+sod:
+  agent_may_code: true
+  agent_may_route: true
+  agent_may_approve_below_touchless: true
+  agent_may_approve_above_touchless: false
+  approver_must_differ_from_coder: true
+  approver_must_differ_from_payer: true
+
+duplicates:
+  # Longer window: seasonal suppliers re-invoice across quarters, and
+  # duplicate risk rises with volume surges.
+  lookback_days: 180
+  # Slightly looser: retail vendor numbering is less disciplined, so more
+  # near-misses must be caught.
+  fuzzy_number_similarity: 0.80
+  fuzzy_amount_tolerance: "0.50"
+  fuzzy_date_window_days: 14
+
+payment_terms:
+  # 2/10 NET30 is worth roughly 36.7% annualised, so capture is worthwhile.
+  default_terms: "2/10 NET30"
+  capture_discounts: true
+  min_discount_annualised_pct: "8.0"
+
+# Services and many non-PO purchases have no goods receipt at all.
+require_grn: false
+# The defining characteristic of this tenant.
+allow_non_po_invoices: true

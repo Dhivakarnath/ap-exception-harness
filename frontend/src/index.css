@@ -1,0 +1,240 @@
+@import "tailwindcss";
+
+/*
+  AP Exception Agent — design system.
+
+  Scene: an AP operations lead and an engineer review invoice runs for hours in a
+  focused office. They must trust every number, spot a failed check instantly,
+  and never mistake an illustrative figure for a measured one. That forces a
+  calm, dark-first control surface — not cream, not generic SaaS navy — with a
+  single committed brand hue (a considered teal-cyan, the "signal" color) and
+  precise, high-contrast semantic status colors for the check verdicts.
+
+  Color strategy: restrained. Tinted-neutral surfaces carry the room; the brand
+  and the status hues are used deliberately, never decoratively. All colors are
+  OKLCH. Body text is held toward the ink end of the ramp for >=4.5:1 contrast —
+  no washed-out gray on tinted near-dark.
+
+  Dark is the default (`<html class="dark">`); a light theme is defined for the
+  same tokens so the whole UI flips by swapping the class.
+*/
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* ---- neutral ramp (cool slate, tinted ~0.01C toward the brand hue 220) ---- */
+  --bg: oklch(0.985 0.003 220);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.972 0.004 220);
+  --surface-3: oklch(0.955 0.006 220);
+  --border: oklch(0.9 0.006 220);
+  --border-strong: oklch(0.82 0.008 220);
+
+  --ink: oklch(0.24 0.014 240);          /* body text: ~13:1 on --bg */
+  --ink-muted: oklch(0.44 0.012 240);    /* secondary: ~6.5:1 on --bg */
+  --ink-subtle: oklch(0.55 0.01 240);    /* tertiary/labels: ~4.6:1 on --bg */
+
+  /* ---- brand (signal teal-cyan) ---- */
+  --brand: oklch(0.58 0.12 220);
+  --brand-ink: oklch(0.44 0.13 220);     /* brand text on light bg, contrast-safe */
+  --brand-contrast: oklch(0.99 0.01 220);/* text on a brand-filled surface */
+  --brand-soft: oklch(0.95 0.03 220);    /* brand-tinted fill */
+
+  /* ---- semantic status: verdicts (pass/flag/fail/skip) + run states ---- */
+  --pass: oklch(0.56 0.13 155);
+  --pass-soft: oklch(0.95 0.04 155);
+  --pass-ink: oklch(0.4 0.12 155);
+
+  --flag: oklch(0.7 0.15 75);
+  --flag-soft: oklch(0.95 0.06 75);
+  --flag-ink: oklch(0.48 0.11 62);
+
+  --fail: oklch(0.56 0.2 25);
+  --fail-soft: oklch(0.95 0.05 25);
+  --fail-ink: oklch(0.48 0.2 25);
+
+  --skip: oklch(0.62 0.008 240);
+  --skip-soft: oklch(0.955 0.004 240);
+  --skip-ink: oklch(0.48 0.008 240);
+
+  /* ---- metric basis: measured is confident, illustrative is clearly caveated ---- */
+  --measured: var(--brand);
+  --illustrative: oklch(0.62 0.13 300);
+  --illustrative-soft: oklch(0.95 0.04 300);
+  --illustrative-ink: oklch(0.46 0.16 300);
+
+  --focus: oklch(0.6 0.14 220);
+
+  /* ---- radii, shadow, motion ---- */
+  --radius: 0.625rem;
+  --shadow-sm: 0 1px 2px oklch(0.2 0.02 240 / 0.06);
+  --shadow-md: 0 4px 16px oklch(0.2 0.02 240 / 0.08);
+  --shadow-lg: 0 12px 40px oklch(0.2 0.02 240 / 0.12);
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 400ms;
+}
+
+.dark {
+  --bg: oklch(0.19 0.012 250);
+  --surface: oklch(0.225 0.014 250);
+  --surface-2: oklch(0.25 0.015 250);
+  --surface-3: oklch(0.285 0.016 250);
+  --border: oklch(0.32 0.016 250);
+  --border-strong: oklch(0.42 0.02 250);
+
+  --ink: oklch(0.95 0.006 240);          /* ~14:1 on --bg */
+  --ink-muted: oklch(0.75 0.012 240);    /* ~6.8:1 */
+  --ink-subtle: oklch(0.64 0.012 240);   /* ~4.6:1 */
+
+  --brand: oklch(0.72 0.13 218);
+  --brand-ink: oklch(0.82 0.12 216);
+  --brand-contrast: oklch(0.18 0.02 250);
+  --brand-soft: oklch(0.32 0.06 220);
+
+  --pass: oklch(0.72 0.15 158);
+  --pass-soft: oklch(0.34 0.07 158);
+  --pass-ink: oklch(0.82 0.14 158);
+
+  --flag: oklch(0.8 0.15 80);
+  --flag-soft: oklch(0.36 0.08 72);
+  --flag-ink: oklch(0.86 0.13 82);
+
+  --fail: oklch(0.68 0.19 25);
+  --fail-soft: oklch(0.36 0.11 25);
+  --fail-ink: oklch(0.8 0.14 27);
+
+  --skip: oklch(0.6 0.01 250);
+  --skip-soft: oklch(0.3 0.01 250);
+  --skip-ink: oklch(0.72 0.01 250);
+
+  --measured: var(--brand);
+  --illustrative: oklch(0.76 0.13 300);
+  --illustrative-soft: oklch(0.34 0.08 300);
+  --illustrative-ink: oklch(0.84 0.12 300);
+
+  --focus: oklch(0.72 0.13 218);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 4px 16px oklch(0 0 0 / 0.36);
+  --shadow-lg: 0 14px 44px oklch(0 0 0 / 0.5);
+}
+
+/* Map the design tokens into Tailwind's theme so utilities like bg-surface,
+   text-ink, border-border, text-pass, etc. resolve to the variables above. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-brand-soft: var(--brand-soft);
+
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-pass-ink: var(--pass-ink);
+  --color-flag: var(--flag);
+  --color-flag-soft: var(--flag-soft);
+  --color-flag-ink: var(--flag-ink);
+  --color-fail: var(--fail);
+  --color-fail-soft: var(--fail-soft);
+  --color-fail-ink: var(--fail-ink);
+  --color-skip: var(--skip);
+  --color-skip-soft: var(--skip-soft);
+  --color-skip-ink: var(--skip-ink);
+
+  --color-measured: var(--measured);
+  --color-illustrative: var(--illustrative);
+  --color-illustrative-soft: var(--illustrative-soft);
+  --color-illustrative-ink: var(--illustrative-ink);
+
+  --color-focus: var(--focus);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    color-scheme: light dark;
+  }
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Visible, consistent focus ring — accessibility is not optional. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 30%, transparent);
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+/* ---- keyframes for streaming reveals (checks arriving one by one) ---- */
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@utility animate-row-in {
+  animation: row-in var(--dur-base) var(--ease-out-quint) both;
+}
+@utility animate-pulse-soft {
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}
+
+/* Reduced motion: honor the OS setting. Reveals become instant; no pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

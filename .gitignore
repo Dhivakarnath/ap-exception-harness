@@ -1,0 +1,51 @@
+# --- secrets (never commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# --- node ---
+node_modules/
+frontend/dist/
+.vite/
+
+# --- generated data & artifacts ---
+datasets/generated/
+datasets/fixtures/*.pdf
+datasets/fixtures/*.png
+**/artifacts/
+eval-reports/
+backend/var/uploads/
+
+# --- local editor / build crumbs ---
+.cursor/
+*.tsbuildinfo
+
+# --- model caches ---
+.cache/
+models/
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+.kiro/
