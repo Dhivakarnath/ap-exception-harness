@@ -4,9 +4,9 @@
 
 An invoice that should have been held can still look like a successful demo. The model reads the PDF, proposes a GL code, says “approve,” and the UI turns green. In accounts payable that is not a product. A controller has to replay *why* the invoice moved, against the policy that was in force that day, with a human as the approver of record when a ceiling is crossed. If the model owns matching, tolerances, or the write, the trail is a conversation, not an audit.
 
-This is a write-up of v1 of an AP exception layer we built to make that trail real. The claim is not that a frontier model is unnecessary in general. The claim is narrower: **on this job, a small multimodal model is enough when control flow is not in the prompt.** Amazon Nova Lite runs extraction and non-PO GL coding. Everything that makes the system employable — routing, three-way match, fourteen policy checks, segregation of duties, the pause for a human, the ERP write contract — is code.
+This is a write-up of production v1 of an AP exception layer we built to make that trail real. The claim is not that a frontier model is unnecessary in general. The claim is narrower: **on this job, a small multimodal model is enough when control flow is not in the prompt.** Amazon Nova Lite runs extraction and non-PO GL coding. Everything that makes the system employable — routing, three-way match, fourteen policy checks, segregation of duties, the pause for a human, the ERP write contract — is code.
 
-v1 is production-shaped, not production volume. Ingress is upload. ERP and notifications are mock connectors behind a real MCP contract. The quality proof is an adversarial eval gate plus a small live Bedrock sample, labeled as such. The code lives in [`ap-exception-harness`](https://github.com/Dhivakarnath/ap-exception-harness). What follows is the decision record, the measurement, one failure we did not have to publish, and the connector work that comes next.
+Ingress is upload. ERP and notifications are MCP connectors with a QuickBooks Online–shaped ledger. The quality proof is an adversarial eval gate plus a small live Bedrock sample, labeled as such. The code lives in [`ap-exception-harness`](https://github.com/Dhivakarnath/ap-exception-harness). What follows is the decision record, the measurement, one failure we did not have to publish, and the connector work that comes next.
 
 ---
 
@@ -54,9 +54,17 @@ The residual risk of D is honest: two paths, three eval surfaces, three permissi
 
 ---
 
+## Where it runs
+
+**Figure 1.** Production v1. Authenticated users submit invoices to application containers that apply policy, call Amazon Bedrock in us-east-1, persist state in PostgreSQL, and post decisions to ERP through MCP. AWS Cloud holds AWS IAM and Amazon Bedrock (Nova Lite and Titan Embeddings V2).
+
+![Production v1: application containers, PostgreSQL, ERP MCP, AWS IAM, and Amazon Bedrock in us-east-1](figures/aws-architecture.drawio.png)
+
+---
+
 ## The line
 
-**Figure 1.** Who owns the decision. Amber boxes may call Nova Lite. Blue boxes are code. Green boxes are a human or an ERP write.
+**Figure 2.** Who owns the decision. Amber boxes may call Nova Lite. Blue boxes are code. Green boxes are a human or an ERP write.
 
 ![Who owns the decision: amber model nodes, blue code path, green human or ERP write](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-1.drawio.png)
 
@@ -82,7 +90,7 @@ Industry positioning, labeled as **not this pilot**: on the [FATURA invoice KIE 
 
 ## Cost, accuracy, latency — three numbers, three labels
 
-**Figure 2.** How we measure. A gated score may fail CI. A reported score is live and small-n. A cited score is someone else’s survey. They never share a headline.
+**Figure 3.** How we measure. A gated score may fail CI. A reported score is live and small-n. A cited score is someone else’s survey. They never share a headline.
 
 ![Three columns: Gated, Reported, Cited — never one headline metric](https://raw.githubusercontent.com/Dhivakarnath/ap-exception-harness/main/blog/figures/AP-2.drawio.png)
 
